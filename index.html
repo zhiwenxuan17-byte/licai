@@ -281,23 +281,17 @@ function loadFundPingzhong(code) {
   });
 }
 
-// 基金重仓股票（东财，JSONP script 加载，绕过 CORS）
-function loadPositions(code) {
-  return new Promise((resolve) => {
-    const cb = '__pos_' + code;
-    const s = document.createElement('script');
-    s.src = 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=' + code +
-      '&deviceid=1&plat=Iphone&product=EFund&version=6.2.8&callback=' + cb;
-    const timer = setTimeout(() => { cleanup(); resolve([]); }, 10000);
-    function cleanup() { clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); try { delete window[cb]; } catch (e) {} }
-    window[cb] = function(j) {
-      const stocks = (j && j.Datas && j.Datas.fundStocks) || [];
-      cleanup();
-      resolve(stocks);
-    };
-    s.onerror = () => { cleanup(); resolve([]); };
-    document.head.appendChild(s);
-  });
+// 基金重仓股票（东财，fetch 直接拿 JSON——该接口返回 application/json，script 标签会被浏览器拒掉；且有 CORS 头，fetch 可用）
+async function loadPositions(code) {
+  try {
+    const url = 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=' + code +
+      '&deviceid=1&plat=Iphone&product=EFund&version=6.2.8';
+    const resp = await fetch(url);
+    const j = await resp.json();
+    return (j && j.Datas && j.Datas.fundStocks) || [];
+  } catch (e) {
+    return [];
+  }
 }
 
 // 腾讯股票实时行情（fetch + 自定义 GBK→ASCII 解码；接口返回 text/html MIME，script 标签会被浏览器拒绝执行，故用 fetch）
