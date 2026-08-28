@@ -286,7 +286,7 @@ async function loadPositions(code) {
   try {
     const url = 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=' + code +
       '&deviceid=1&plat=Iphone&product=EFund&version=6.2.8';
-    const resp = await fetch(url);
+    const resp = await fetch(url, { referrerPolicy: 'no-referrer' });
     const j = await resp.json();
     return (j && j.Datas && j.Datas.fundStocks) || [];
   } catch (e) {
