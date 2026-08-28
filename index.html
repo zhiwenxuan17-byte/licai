@@ -242,24 +242,14 @@ function tsToDate(ts) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// 根据 TEXCH 字段（持仓接口返回的交易所代码）判断市场前缀，腾讯行情用
-// TEXCH: 1=上海(sh) 2=深圳(sz) 4=北交所(bj)
-function tencentSec(code, texch) {
-  code = String(code).trim();
-  let m;
-  if (texch === '4') m = 'bj';        // 北交所
-  else if (texch === '1') m = 'sh';   // 上海
-  else if (texch === '2') m = 'sz';   // 深圳
-  else {
-    // 兜底：按代码规则判断
-    if (/^\d{5}$/.test(code)) m = 'hk';          // 港股 5 位代码
-    else if (/^[689]/.test(code)) m = 'sh';      // 6 沪市、8/9 科创板等
-    else if (/^[03]/.test(code)) m = 'sz';       // 0 深市、3 创业板
-    else if (/^[48]/.test(code)) m = 'bj';       // 北交所
-    else m = 'sz';
-  }
-  if (m === 'hk') return 'hk' + code;
-  return m + code;                    // sh/sz/bj 均直接加前缀
+// pingzhongdata 的 stockCodes 元素格式：代码+市场（末位 1=沪 0=深/北），北交所按 92/43/83/87/88 开头识别
+function stockSec(item) {
+  const s = String(item);
+  const gpdm = s.slice(0, -1);
+  const market = s.slice(-1);
+  if (market === '1') return 'sh' + gpdm;
+  if (/^(92|43|83|87|88)/.test(gpdm)) return 'bj' + gpdm;
+  return 'sz' + gpdm;
 }
 
 /* ============ 数据抓取 ============ */
@@ -273,25 +263,13 @@ function loadFundPingzhong(code) {
     s.onload = () => {
       const name = window.fS_name || '';
       const trend = window.Data_netWorthTrend || [];
+      const stockCodes = window.stockCodes || [];
       cleanup();
-      resolve({ name, trend });
+      resolve({ name, trend, stockCodes });
     };
     s.onerror = () => { cleanup(); resolve(null); };
     document.head.appendChild(s);
   });
-}
-
-// 基金重仓股票（东财，fetch 直接拿 JSON——该接口返回 application/json，script 标签会被浏览器拒掉；且有 CORS 头，fetch 可用）
-async function loadPositions(code) {
-  try {
-    const url = 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=' + code +
-      '&deviceid=1&plat=Iphone&product=EFund&version=6.2.8';
-    const resp = await fetch(url, { referrerPolicy: 'no-referrer' });
-    const j = await resp.json();
-    return (j && j.Datas && j.Datas.fundStocks) || [];
-  } catch (e) {
-    return [];
-  }
 }
 
 // 腾讯股票实时行情（fetch + 自定义 GBK→ASCII 解码；接口返回 text/html MIME，script 标签会被浏览器拒绝执行，故用 fetch）
@@ -336,7 +314,7 @@ async function loadQuotes(secs) {
 }
 
 /* ============ 主流程 ============ */
-let cache = {};   // code -> { name, trend, positions, quotes }
+let cache = {};   // code -> { name, trend, stocks, quotes }
 
 async function buildAll() {
   const funds = getFunds();
@@ -349,19 +327,13 @@ async function buildAll() {
       fundInfos.push(info);
     }
 
-    // 2. 收集所有基金的重仓股票，批量抓行情（保留 TEXCH 用于判断市场）
+    // 2. 收集所有基金的重仓股票代码，批量抓行情（stockCodes 来自 pingzhongdata）
     const secSet = new Set();
-    const positionMap = {};
-    for (const f of funds) {
-      const pos = await loadPositions(f.code);
-      positionMap[f.code] = pos;
-      pos.forEach(p => {
-        if (p.GPDM) {
-          const sec = tencentSec(String(p.GPDM), p.TEXCH);
-          if (sec) secSet.add(sec);
-        }
-      });
-    }
+    funds.forEach((f, i) => {
+      const info = fundInfos[i];
+      const codes = (info && info.stockCodes) || [];
+      codes.forEach(item => { if (item) secSet.add(stockSec(item)); });
+    });
 
     // 3. 批量抓股票实时行情
     const quotes = await loadQuotes([...secSet]);
@@ -373,7 +345,7 @@ async function buildAll() {
         fund: f,
         name: (info && info.name) || f.name,
         trend: (info && info.trend) || [],
-        positions: positionMap[f.code] || [],
+        stocks: (info && info.stockCodes) || [],
         quotes: quotes
       };
     });
@@ -398,19 +370,15 @@ function calcFund(c) {
     lastReturn = num(last.equityReturn);
   }
 
-  // 今日估算涨跌幅：用重仓股加权自算
-  let estPct = 0, weightSum = 0;
-  c.positions.forEach(p => {
-    const key = tencentSec(String(p.GPDM), p.TEXCH);
-    const q = key && c.quotes[key];
-    if (q && num(p.JZBL) > 0) {
-      const w = num(p.JZBL);
-      estPct += w * q.changePct;
-      weightSum += w;
-    }
+  // 今日估算涨跌幅：重仓股等权重自算（fundmobapi 已 UA 风控，改用 pingzhongdata 的 stockCodes）
+  let estPct = 0, estCount = 0;
+  c.stocks.forEach(item => {
+    const sec = stockSec(item);
+    const q = c.quotes[sec];
+    if (q) { estPct += q.changePct; estCount++; }
   });
-  const hasEstimate = weightSum > 0;
-  if (hasEstimate) estPct = estPct / weightSum;   // 归一化到重仓股范围
+  const hasEstimate = estCount > 0;
+  if (hasEstimate) estPct = estPct / estCount;
 
   // 今日估算净值
   const estNav = lastNav > 0 ? lastNav * (1 + estPct / 100) : 0;
@@ -436,10 +404,10 @@ function calcFund(c) {
   const estProfit = marketValue * (estPct / 100);
 
   return {
-    code: f.code, name: c.name, trend, positions: c.positions, quotes: c.quotes,
+    code: f.code, name: c.name, trend, stocks: c.stocks, quotes: c.quotes,
     targetWeight: num(f.targetWeight),
     marketValue, principal, profit, profitPct,
-    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, weightSum, hasEstimate
+    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, estCount, hasEstimate
   };
 }
 
@@ -550,15 +518,14 @@ function renderTable(rows, totalMarket) {
 }
 
 function renderStocks(c) {
-  if (!c.positions.length) return '<div class="stock-box"><span class="hint">暂无持仓数据（可能该基金未披露持仓或为债基）</span></div>';
-  const items = c.positions.map(p => {
-    const key = tencentSec(String(p.GPDM), p.TEXCH);
-    const q = key && c.quotes[key];
-    const w = num(p.JZBL);
+  if (!c.stocks.length) return '<div class="stock-box"><span class="hint">暂无持仓数据（可能该基金未披露持仓或为债基）</span></div>';
+  const items = c.stocks.map(item => {
+    const sec = stockSec(item);
+    const q = c.quotes[sec];
+    const gpdm = String(item).slice(0, -1);
     return `
       <div class="stock-item">
-        <div class="sname"><span>${escapeHtml(p.GPJC || p.GPDM)}</span><span style="font-size:11px;color:#8a8f99">${p.GPDM}</span></div>
-        <div class="srow"><span>持仓占比</span><b>${fmt(w)}%</b></div>
+        <div class="sname"><span>${gpdm}</span><span style="font-size:11px;color:#8a8f99">${sec}</span></div>
         ${q ? `
           <div class="srow"><span>最新价</span><b>${fmt(q.price)}</b></div>
           <div class="srow"><span>今日涨跌</span><b class="${cls(q.changePct)}">${fmtPct(q.changePct)}</b></div>
