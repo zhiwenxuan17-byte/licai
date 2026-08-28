@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>居守的理财追踪</title>
+<style>
+  :root {
+    --bg: #ffffff;       /* 白色背景 */
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #8a8f99;
+    --line: #e8eaee;
+    --up: #e64545;      /* 涨-红 */
+    --down: #1f9d55;    /* 跌-绿 */
+    --accent: #2B85FF;  /* 蓝天蓝 */
+    --accent-weak: #eaf2ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding-bottom: 60px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px; }
+
+  /* 顶部 */
+  header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  header h1 {
+    font-size: 20px; font-weight: 700; letter-spacing: 1px; color: #fff;
+    background: #2B85FF; padding: 8px 18px; border-radius: 10px; display: inline-block;
+  }
+  .meta { font-size: 12px; color: #5b6b66; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #c4c9d4; display: inline-block; }
+  .dot.live { background: #1f9d55; box-shadow: 0 0 0 3px rgba(31,157,85,.15); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+  /* 卡片通用 */
+  .card { background: var(--card); border: 1px solid #eef1f5; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .tag { font-size: 11px; color: var(--muted); background: #f2f4f7; padding: 2px 8px; border-radius: 20px; font-weight: 400; }
+
+  /* 早报 */
+  .report p { font-size: 14px; margin-bottom: 6px; }
+  .report .hl-up { color: var(--up); font-weight: 600; }
+  .report .hl-down { color: var(--down); font-weight: 600; }
+  .report .hl { font-weight: 600; }
+
+  /* 汇总卡片 */
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat { background: #2B85FF; border: 1px solid #2B85FF; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .stat .label { font-size: 12px; color: rgba(255,255,255,.85); margin-bottom: 6px; }
+  .stat .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
+  .stat .sub { font-size: 12px; margin-top: 4px; color: rgba(255,255,255,.85); }
+  .stat .value.up { color: #ffe0e0; }
+  .stat .value.down { color: #c9f7dd; }
+  .stat .sub.up { color: #ffe0e0; }
+  .stat .sub.down { color: #c9f7dd; }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th {
+    text-align: right; font-weight: 500; color: var(--muted); font-size: 12px;
+    padding: 10px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  tbody td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tbody td.fund-cell { text-align: left; }
+  tbody td.weight-cell { text-align: left; }
+  .fname { font-weight: 600; }
+  .fcode { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .row:hover { background: #fafbfc; }
+  .expand-btn { cursor: pointer; color: var(--accent); font-size: 12px; background: var(--accent-weak); border: none; padding: 3px 10px; border-radius: 12px; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .flat { color: var(--muted); }
+
+  /* 持仓股票展开行 */
+  .stock-row { display: none; }
+  .stock-row.open { display: table-row; }
+  .stock-row td { background: #fafbfc; padding: 4px 8px 16px; }
+  .stock-box { max-width: 100%; overflow: hidden; }
+  .stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  .stock-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+  .stock-item .sname { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .stock-item .srow { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; margin-top: 2px; }
+  .stock-item .srow b { font-weight: 600; }
+
+  /* 底部工具条 */
+  .toolbar { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+  button.primary { background: var(--accent); color: #fff; border: none; padding: 10px 20px; border-radius: 10px; font-size: 14px; cursor: pointer; }
+  button.ghost { background: #fff; color: var(--text); border: 1px solid var(--line); padding: 10px 20px; border-radius: 10px; font-size: 14px; cursor: pointer; }
+  button:hover { opacity: .9; }
+  button.btn-sm { padding: 6px 14px; font-size: 13px; border-radius: 8px; }
+
+  /* 弹窗 */
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow: auto; }
+  .mask.open { display: flex; }
+  .modal { background: #fff; border-radius: 16px; max-width: 560px; width: 100%; padding: 22px 24px; }
+  .modal h3 { font-size: 18px; margin-bottom: 16px; }
+  .form-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  .form-row label { width: 88px; font-size: 13px; color: var(--muted); flex-shrink: 0; }
+  .form-row input { flex: 1; min-width: 120px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .fund-list { margin: 14px 0; max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .fund-edit-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .fund-edit-item:last-child { border-bottom: none; }
+  .fund-edit-item .fi-name { flex: 1; font-size: 14px; }
+  .fund-edit-item .fi-code { font-size: 11px; color: var(--muted); }
+  .fund-edit-item input { width: 70px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 13px; text-align: right; }
+  .fund-edit-item button { border: none; background: none; color: var(--up); cursor: pointer; font-size: 13px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+  .add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .add-row input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  @media (max-width: 720px) {
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    table { font-size: 12px; }
+    thead th, tbody td { padding: 8px 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>居守的理财追踪</h1>
+    <div class="meta">
+      <button class="primary btn-sm" id="btnAddTop">添加基金</button>
+      <button class="primary btn-sm" id="btnRefresh">立即刷新</button>
+      <span id="dateLabel"></span>
+      <span class="dot" id="liveDot"></span>
+      <span id="updateTime">正在加载数据…</span>
+    </div>
+  </header>
+
+  <!-- 每日早报 -->
+  <section class="card report">
+    <h2>每日早报 <span class="tag">截止昨日 24:00 持仓现状</span></h2>
+    <div id="reportBody"><p class="hint">正在汇总持仓现状…</p></div>
+  </section>
+
+  <!-- 汇总 -->
+  <section class="summary">
+    <div class="stat"><div class="label">总持有金额</div><div class="value" id="sMarket">--</div><div class="sub" id="sMarketSub">--</div></div>
+    <div class="stat"><div class="label">已投本金</div><div class="value" id="sPrincipal">--</div><div class="sub">累计投入</div></div>
+    <div class="stat"><div class="label">持有收益</div><div class="value" id="sProfit">--</div><div class="sub" id="sProfitSub">--</div></div>
+    <div class="stat"><div class="label">今日估算</div><div class="value" id="sEstimate">--</div><div class="sub" id="sEstimateSub">--</div></div>
+  </section>
+
+  <!-- 持仓总览 -->
+  <section class="card">
+    <h2>持仓总览 <span class="tag" id="fundCount">--</span></h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>基金</th>
+            <th>持有金额</th>
+            <th>已投本金</th>
+            <th>持有收益</th>
+            <th>今日估算</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="fundTable"></tbody>
+      </table>
+    </div>
+    <p class="hint">点击「持仓」可查看每只基金的重仓股票及当日实时估算。数据盘中每 60 秒自动刷新。</p>
+  </section>
+</div>
+
+<!-- 管理基金弹窗 -->
+<div class="mask" id="mask">
+  <div class="modal">
+    <h3>管理基金</h3>
+    <div class="form-row"><label>填写说明</label><span class="hint">本金填元、份额填份。填了份额按「份额×净值」精确算持有金额，否则按本金近似。</span></div>
+    <div class="fund-list" id="fundList"></div>
+    <div class="add-row">
+      <input id="addCode" placeholder="基金代码，如 017745">
+      <input id="addName" placeholder="基金名称（自动获取）">
+      <button class="primary" id="btnAdd">添加</button>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" id="btnCancel">取消</button>
+      <button class="primary" id="btnSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ 常量与数据 ============ */
+const STORE_KEY = 'jushou_funds_v1';
+
+// 预置的居守持仓基金（代码 + 名称），本金/份额由用户后续填写
+const DEFAULT_FUNDS = [
+  { code: '000043', name: '嘉实美国成长股票' },
+  { code: '017745', name: '嘉实绿色主题股票发起式C' },
+  { code: '160221', name: '国泰国证有色金属行业指数(LOF)A' },
+  { code: '017437', name: '华宝纳斯达克精选股票发起式' },
+  { code: '020741', name: '华泰保兴安悦债券C' },
+  { code: '002404', name: '博时裕乾纯债债券C' },
+  { code: '004243', name: '广发道琼斯石油指数人民币C' },
+  { code: '001553', name: '天弘中证证券保险C' },
+  { code: '008764', name: '天弘越南市场股票发起' },
+  { code: '020671', name: '易方达上证科创板芯片指数发起式C' },
+  { code: '021299', name: '中欧北证50成份指数发起C' },
+  { code: '002580', name: '泰信鑫选灵活配置混合C' },
+  { code: '020608', name: '南方中证机器人指数发起C' },
+  { code: '017811', name: '东方人工智能主题混合C' },
+  { code: '016387', name: '永赢低碳环保智选混合发起C' },
+  { code: '007771', name: '同泰开泰混合C' },
+  { code: '016531', name: '鹏华碳中和主题混合C' },
+  { code: '001704', name: '国投瑞银进宝灵活配置混合' },
+  { code: '016971', name: '华夏恒生生物科技ETF发起式联接' },
+];
+
+function getFunds() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return DEFAULT_FUNDS.map(f => ({ code: f.code, name: f.name, targetWeight: '', principal: '', shares: '' }));
+}
+function saveFunds(funds) { localStorage.setItem(STORE_KEY, JSON.stringify(funds)); }
+
+/* ============ 工具函数 ============ */
+function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function fmt(n, digits = 2) { return n.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
+function fmtMoney(n) { return '¥' + fmt(n); }
+function fmtPct(n) { return (n >= 0 ? '+' : '') + fmt(n) + '%'; }
+function cls(n) { return n > 0.0001 ? 'up' : (n < -0.0001 ? 'down' : 'flat'); }
+function signNum(n) { return (n > 0 ? '+' : '') + fmt(n); }
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function tsToDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 根据 TEXCH 字段（持仓接口返回的交易所代码）判断市场前缀，腾讯行情用
+// TEXCH: 1=上海(sh) 2=深圳(sz) 4=北交所(bj)
+function tencentSec(code, texch) {
+  code = String(code).trim();
+  let m;
+  if (texch === '4') m = 'bj';        // 北交所
+  else if (texch === '1') m = 'sh';   // 上海
+  else if (texch === '2') m = 'sz';   // 深圳
+  else {
+    // 兜底：按代码规则判断
+    if (/^\d{5}$/.test(code)) m = 'hk';          // 港股 5 位代码
+    else if (/^[689]/.test(code)) m = 'sh';      // 6 沪市、8/9 科创板等
+    else if (/^[03]/.test(code)) m = 'sz';       // 0 深市、3 创业板
+    else if (/^[48]/.test(code)) m = 'bj';       // 北交所
+    else m = 'sz';
+  }
+  if (m === 'hk') return 'hk' + code;
+  return m + code;                    // sh/sz/bj 均直接加前缀
+}
+
+/* ============ 数据抓取 ============ */
+// 通过 script 标签加载 pingzhongdata（该接口无 CORS 头，fetch 会被拦）
+function loadFundPingzhong(code) {
+  return new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = 'https://fund.eastmoney.com/pingzhongdata/' + code + '.js?v=' + Date.now();
+    const timer = setTimeout(() => { cleanup(); resolve(null); }, 10000);
+    function cleanup() { clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); }
+    s.onload = () => {
+      const name = window.fS_name || '';
+      const trend = window.Data_netWorthTrend || [];
+      cleanup();
+      resolve({ name, trend });
+    };
+    s.onerror = () => { cleanup(); resolve(null); };
+    document.head.appendChild(s);
+  });
+}
+
+// 基金重仓股票（东财，JSONP script 加载，绕过 CORS）
+function loadPositions(code) {
+  return new Promise((resolve) => {
+    const cb = '__pos_' + code;
+    const s = document.createElement('script');
+    s.src = 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=' + code +
+      '&deviceid=1&plat=Iphone&product=EFund&version=6.2.8&callback=' + cb;
+    const timer = setTimeout(() => { cleanup(); resolve([]); }, 10000);
+    function cleanup() { clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); try { delete window[cb]; } catch (e) {} }
+    window[cb] = function(j) {
+      const stocks = (j && j.Datas && j.Datas.fundStocks) || [];
+      cleanup();
+      resolve(stocks);
+    };
+    s.onerror = () => { cleanup(); resolve([]); };
+    document.head.appendChild(s);
+  });
+}
+
+// 腾讯股票实时行情（script 标签加载，charset=GBK，绕过 CORS）
+function loadQuotes(secs) {
+  return new Promise((resolve) => {
+    if (!secs.length) return resolve({});
+    const s = document.createElement('script');
+    s.charset = 'GBK';
+    s.src = 'https://qt.gtimg.cn/q=' + secs.join(',') + '&r=' + Date.now();
+    const timer = setTimeout(() => { cleanup(); resolve({}); }, 10000);
+    function cleanup() { clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); }
+    s.onload = () => {
+      const out = {};
+      secs.forEach(sec => {
+        const v = window['v_' + sec];
+        if (v) {
+          const f = v.split('~');
+          if (f.length > 33) {
+            out[sec] = {
+              name: f[1],
+              price: num(f[3]),       // 当前价
+              prevClose: num(f[4]),   // 昨收
+              change: num(f[31]),     // 涨跌额
+              changePct: num(f[32])   // 涨跌幅%
+            };
+          }
+        }
+      });
+      cleanup();
+      resolve(out);
+    };
+    s.onerror = () => { cleanup(); resolve({}); };
+    document.head.appendChild(s);
+  });
+}
+
+/* ============ 主流程 ============ */
+let cache = {};   // code -> { name, trend, positions, quotes }
+
+async function buildAll() {
+  const funds = getFunds();
+  setLive(true, '正在抓取数据…');
+  try {
+    // 1. 串行加载每只基金的基础数据（script 标签会互相覆盖全局变量，必须串行）
+    const fundInfos = [];
+    for (const f of funds) {
+      const info = await loadFundPingzhong(f.code);
+      fundInfos.push(info);
+    }
+
+    // 2. 收集所有基金的重仓股票，批量抓行情（保留 TEXCH 用于判断市场）
+    const secSet = new Set();
+    const positionMap = {};
+    for (const f of funds) {
+      const pos = await loadPositions(f.code);
+      positionMap[f.code] = pos;
+      pos.forEach(p => {
+        if (p.GPDM) {
+          const sec = tencentSec(String(p.GPDM), p.TEXCH);
+          if (sec) secSet.add(sec);
+        }
+      });
+    }
+
+    // 3. 批量抓股票实时行情
+    const quotes = await loadQuotes([...secSet]);
+
+    // 4. 汇总到 cache
+    funds.forEach((f, i) => {
+      const info = fundInfos[i];
+      cache[f.code] = {
+        fund: f,
+        name: (info && info.name) || f.name,
+        trend: (info && info.trend) || [],
+        positions: positionMap[f.code] || [],
+        quotes: quotes
+      };
+    });
+
+    render(funds);
+    setLive(true, '已更新');
+  } catch (e) {
+    setLive(false, '加载失败：' + e.message);
+  }
+}
+
+/* ============ 计算 ============ */
+function calcFund(c) {
+  const f = c.fund;
+  const trend = c.trend;
+  // 最新净值（昨日收盘净值）
+  let lastNav = 0, lastDate = '', lastReturn = 0;
+  if (trend.length) {
+    const last = trend[trend.length - 1];
+    lastNav = num(last.y);
+    lastDate = tsToDate(last.x);
+    lastReturn = num(last.equityReturn);
+  }
+
+  // 今日估算涨跌幅：用重仓股加权自算
+  let estPct = 0, weightSum = 0;
+  c.positions.forEach(p => {
+    const key = tencentSec(String(p.GPDM), p.TEXCH);
+    const q = key && c.quotes[key];
+    if (q && num(p.JZBL) > 0) {
+      const w = num(p.JZBL);
+      estPct += w * q.changePct;
+      weightSum += w;
+    }
+  });
+  const hasEstimate = weightSum > 0;
+  if (hasEstimate) estPct = estPct / weightSum;   // 归一化到重仓股范围
+
+  // 今日估算净值
+  const estNav = lastNav > 0 ? lastNav * (1 + estPct / 100) : 0;
+
+  // 份额与本金
+  const shares = num(f.shares);
+  const principal = num(f.principal);
+
+  // 持有金额：优先用份额×最新净值，否则用本金近似
+  let marketValue = 0;
+  if (shares > 0 && lastNav > 0) marketValue = shares * lastNav;
+  else if (principal > 0) marketValue = principal;
+
+  // 持有收益
+  let profit = 0, profitPct = 0;
+  if (shares > 0 && lastNav > 0) {
+    const costNav = principal / shares;             // 成本净值
+    profit = shares * (lastNav - costNav);
+    profitPct = costNav > 0 ? (lastNav / costNav - 1) * 100 : 0;
+  }
+
+  // 今日估算收益（金额）
+  const estProfit = marketValue * (estPct / 100);
+
+  return {
+    code: f.code, name: c.name, trend, positions: c.positions, quotes: c.quotes,
+    targetWeight: num(f.targetWeight),
+    marketValue, principal, profit, profitPct,
+    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, weightSum, hasEstimate
+  };
+}
+
+/* ============ 渲染 ============ */
+function render(funds) {
+  const items = funds.map(f => ({ fund: f, c: cache[f.code] }));
+  const rows = items.map(x => {
+    if (!x.c) return null;
+    return { calc: calcFund(x.c), raw: x.c };
+  }).filter(Boolean);
+
+  const totalMarket = rows.reduce((s, r) => s + r.calc.marketValue, 0);
+  const totalPrincipal = rows.reduce((s, r) => s + r.calc.principal, 0);
+  const totalProfit = rows.reduce((s, r) => s + r.calc.profit, 0);
+  const totalEst = rows.reduce((s, r) => s + r.calc.estProfit, 0);
+
+  // 汇总卡片
+  document.getElementById('sMarket').textContent = fmtMoney(totalMarket);
+  document.getElementById('sMarketSub').textContent = '按最新净值估算';
+  document.getElementById('sPrincipal').textContent = fmtMoney(totalPrincipal);
+  document.getElementById('sProfit').textContent = (totalProfit >= 0 ? '+' : '') + fmtMoney(totalProfit);
+  document.getElementById('sProfit').className = 'value ' + cls(totalProfit);
+  document.getElementById('sProfitSub').textContent = totalPrincipal > 0 ? fmtPct(totalProfit / totalPrincipal * 100) : '--';
+  document.getElementById('sProfitSub').className = 'sub ' + cls(totalProfit);
+  document.getElementById('sEstimate').textContent = (totalEst >= 0 ? '+' : '') + fmtMoney(totalEst);
+  document.getElementById('sEstimate').className = 'value ' + cls(totalEst);
+  document.getElementById('sEstimateSub').textContent = '重仓股加权估算';
+  document.getElementById('fundCount').textContent = rows.length + ' 只基金';
+
+  // 早报
+  renderReport(rows, totalMarket, totalProfit, totalEst, totalPrincipal);
+
+  // 表格
+  renderTable(rows, totalMarket);
+}
+
+function renderReport(rows, totalMarket, totalProfit, totalEst, totalPrincipal) {
+  const el = document.getElementById('reportBody');
+  if (!rows.length) { el.innerHTML = '<p class="hint">暂无基金数据，请点击「管理基金」添加。</p>'; return; }
+
+  const gainers = rows.slice().sort((a, b) => b.calc.lastReturn - a.calc.lastReturn);
+  const losers = rows.slice().sort((a, b) => a.calc.lastReturn - b.calc.lastReturn);
+  const topGain = gainers[0], topLoss = losers[0];
+  const upCount = rows.filter(r => r.calc.lastReturn > 0).length;
+  const downCount = rows.filter(r => r.calc.lastReturn < 0).length;
+
+  const profitRate = totalPrincipal > 0 ? totalProfit / totalPrincipal * 100 : 0;
+  const todayPct = totalMarket > 0 ? totalEst / totalMarket * 100 : 0;
+
+  let html = '';
+  html += `<p>截至昨日收盘，共持有 <span class="hl">${rows.length}</span> 只基金，总市值 <span class="hl">${fmtMoney(totalMarket)}</span>，累计投入本金 <span class="hl">${fmtMoney(totalPrincipal)}</span>。</p>`;
+  html += `<p>持有收益 <span class="${cls(totalProfit)} hl-${cls(totalProfit)}">${signNum(totalProfit)} 元（${fmtPct(profitRate)}）</span>，昨日 ${upCount} 涨 ${downCount} 跌。</p>`;
+  if (topGain && topGain.calc.lastReturn !== 0) html += `<p>昨日涨幅居前：<span class="hl-up">${topGain.calc.name}（${fmtPct(topGain.calc.lastReturn)}）</span>。</p>`;
+  if (topLoss && topLoss.calc.lastReturn !== 0) html += `<p>昨日跌幅居前：<span class="hl-down">${topLoss.calc.name}（${fmtPct(topLoss.calc.lastReturn)}）</span>。</p>`;
+  html += `<p>今日盘中估算：整体约 <span class="${cls(totalEst)}">${signNum(totalEst)} 元（${fmtPct(todayPct)}）</span>，基于重仓股实时行情加权测算，仅供盘中参考。</p>`;
+  el.innerHTML = html;
+}
+
+function renderTable(rows, totalMarket) {
+  const tbody = document.getElementById('fundTable');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8a8f99;padding:24px;">暂无数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r, idx) => {
+    const c = r.calc;
+    return `
+    <tr class="row" data-idx="${idx}">
+      <td class="fund-cell">
+        <div class="fname">${escapeHtml(c.name)}</div>
+        <div class="fcode">${c.code}</div>
+      </td>
+      <td>${fmtMoney(c.marketValue)}</td>
+      <td>${c.principal > 0 ? fmtMoney(c.principal) : '<span style="color:#c4c9d4">--</span>'}</td>
+      <td class="${cls(c.profit)}">${c.profit !== 0 ? signNum(c.profit) : '--'}${c.profitPct ? ' <span style="font-size:11px">' + fmtPct(c.profitPct) + '</span>' : ''}</td>
+      <td class="${c.hasEstimate ? cls(c.estPct) : 'flat'}">${c.hasEstimate ? signNum(c.estProfit) + ' <span style="font-size:11px">' + fmtPct(c.estPct) + '</span>' : '<span style="color:#c4c9d4">暂无</span>'}</td>
+      <td><button class="expand-btn" data-idx="${idx}">持仓</button></td>
+    </tr>
+    <tr class="stock-row" id="stock-${idx}">
+      <td colspan="6">${renderStocks(c)}</td>
+    </tr>`;
+  }).join('');
+
+  // 合计行
+  const totalProfit = rows.reduce((s, r) => s + r.calc.profit, 0);
+  const totalEst = rows.reduce((s, r) => s + r.calc.estProfit, 0);
+  const totalPrincipal = rows.reduce((s, r) => s + r.calc.principal, 0);
+  tbody.innerHTML += `
+    <tr style="font-weight:700;background:#fafbfc;">
+      <td class="fund-cell">合计</td>
+      <td>${fmtMoney(totalMarket)}</td>
+      <td>${fmtMoney(totalPrincipal)}</td>
+      <td class="${cls(totalProfit)}">${signNum(totalProfit)}</td>
+      <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
+      <td></td>
+    </tr>`;
+
+  // 展开按钮事件
+  tbody.querySelectorAll('.expand-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.getAttribute('data-idx');
+      const row = document.getElementById('stock-' + idx);
+      const open = row.classList.contains('open');
+      row.classList.toggle('open', !open);
+      btn.textContent = open ? '持仓' : '收起';
+    });
+  });
+}
+
+function renderStocks(c) {
+  if (!c.positions.length) return '<div class="stock-box"><span class="hint">暂无持仓数据（可能该基金未披露持仓或为债基）</span></div>';
+  const items = c.positions.map(p => {
+    const key = tencentSec(String(p.GPDM), p.TEXCH);
+    const q = key && c.quotes[key];
+    const w = num(p.JZBL);
+    return `
+      <div class="stock-item">
+        <div class="sname"><span>${escapeHtml(p.GPJC || p.GPDM)}</span><span style="font-size:11px;color:#8a8f99">${p.GPDM}</span></div>
+        <div class="srow"><span>持仓占比</span><b>${fmt(w)}%</b></div>
+        ${q ? `
+          <div class="srow"><span>最新价</span><b>${fmt(q.price)}</b></div>
+          <div class="srow"><span>今日涨跌</span><b class="${cls(q.changePct)}">${fmtPct(q.changePct)}</b></div>
+        ` : `<div class="srow"><span>行情</span><b class="flat">暂无</b></div>`}
+      </div>`;
+  }).join('');
+  return `<div class="stock-box"><div class="stock-grid">${items}</div></div>`;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ============ 实时状态 ============ */
+function setLive(live, text) {
+  const dot = document.getElementById('liveDot');
+  dot.className = 'dot' + (live ? ' live' : '');
+  document.getElementById('updateTime').textContent = text + ' · ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+/* ============ 管理基金弹窗 ============ */
+let editFunds = [];
+function openEditor() {
+  editFunds = getFunds().map(f => ({ ...f }));
+  renderEditor();
+  document.getElementById('mask').classList.add('open');
+}
+function closeEditor() { document.getElementById('mask').classList.remove('open'); }
+
+function renderEditor() {
+  const el = document.getElementById('fundList');
+  el.innerHTML = editFunds.map((f, i) => `
+    <div class="fund-edit-item">
+      <div class="fi-name">${escapeHtml(f.name || '未命名')}<div class="fi-code">${escapeHtml(f.code)}</div></div>
+      <input data-i="${i}" data-k="principal" placeholder="本金(元)" value="${f.principal ?? ''}">
+      <input data-i="${i}" data-k="shares" placeholder="份额(份)" value="${f.shares ?? ''}">
+      <button data-del="${i}">删除</button>
+    </div>`).join('') || '<div class="hint" style="padding:16px;text-align:center">暂无基金，请在上方添加</div>';
+
+  el.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const i = +inp.getAttribute('data-i');
+      const k = inp.getAttribute('data-k');
+      editFunds[i][k] = inp.value;
+    });
+  });
+  el.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editFunds.splice(+btn.getAttribute('data-del'), 1);
+      renderEditor();
+    });
+  });
+}
+
+document.getElementById('btnAddTop').addEventListener('click', openEditor);
+document.getElementById('btnCancel').addEventListener('click', closeEditor);
+document.getElementById('mask').addEventListener('click', e => { if (e.target.id === 'mask') closeEditor(); });
+document.getElementById('btnAdd').addEventListener('click', async () => {
+  const code = document.getElementById('addCode').value.trim();
+  const name = document.getElementById('addName').value.trim();
+  if (!code) { alert('请输入基金代码'); return; }
+  let finalName = name;
+  if (!finalName) {
+    const info = await loadFundPingzhong(code);
+    finalName = (info && info.name) || code;
+  }
+  editFunds.push({ code, name: finalName, principal: '', shares: '' });
+  document.getElementById('addCode').value = '';
+  document.getElementById('addName').value = '';
+  renderEditor();
+});
+// 输入代码后失焦，自动获取并填充官方基金名称
+document.getElementById('addCode').addEventListener('blur', async () => {
+  const code = document.getElementById('addCode').value.trim();
+  const nameInput = document.getElementById('addName');
+  if (code && !nameInput.value) {
+    const info = await loadFundPingzhong(code);
+    if (info && info.name) nameInput.value = info.name;
+  }
+});
+document.getElementById('btnSave').addEventListener('click', () => {
+  saveFunds(editFunds);
+  closeEditor();
+  buildAll();
+});
+
+document.getElementById('btnRefresh').addEventListener('click', buildAll);
+
+/* ============ 初始化 ============ */
+document.getElementById('dateLabel').textContent = todayStr();
+buildAll();
+setInterval(buildAll, 60000);   // 每 60 秒自动刷新
+</script>
+</body>
+</html>
