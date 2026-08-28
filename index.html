@@ -300,38 +300,34 @@ function loadPositions(code) {
   });
 }
 
-// 腾讯股票实时行情（script 标签加载，charset=GBK，绕过 CORS）
-function loadQuotes(secs) {
-  return new Promise((resolve) => {
-    if (!secs.length) return resolve({});
-    const s = document.createElement('script');
-    s.charset = 'GBK';
-    s.src = 'https://qt.gtimg.cn/q=' + secs.join(',') + '&r=' + Date.now();
-    const timer = setTimeout(() => { cleanup(); resolve({}); }, 10000);
-    function cleanup() { clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); }
-    s.onload = () => {
-      const out = {};
-      secs.forEach(sec => {
-        const v = window['v_' + sec];
-        if (v) {
-          const f = v.split('~');
-          if (f.length > 33) {
-            out[sec] = {
-              name: f[1],
-              price: num(f[3]),       // 当前价
-              prevClose: num(f[4]),   // 昨收
-              change: num(f[31]),     // 涨跌额
-              changePct: num(f[32])   // 涨跌幅%
-            };
-          }
+// 腾讯股票实时行情（fetch + GBK 解码；该接口返回 text/html MIME，script 标签会被浏览器拒绝执行，故用 fetch）
+async function loadQuotes(secs) {
+  if (!secs.length) return {};
+  try {
+    const url = 'https://qt.gtimg.cn/q=' + secs.join(',') + '&r=' + Date.now();
+    const resp = await fetch(url);
+    const buf = await resp.arrayBuffer();
+    const text = new TextDecoder('gbk').decode(buf);
+    const out = {};
+    secs.forEach(sec => {
+      const m = text.match(new RegExp('v_' + sec + '="([^"]*)"'));
+      if (m) {
+        const f = m[1].split('~');
+        if (f.length > 33) {
+          out[sec] = {
+            name: f[1],
+            price: num(f[3]),       // 当前价
+            prevClose: num(f[4]),   // 昨收
+            change: num(f[31]),     // 涨跌额
+            changePct: num(f[32])   // 涨跌幅%
+          };
         }
-      });
-      cleanup();
-      resolve(out);
-    };
-    s.onerror = () => { cleanup(); resolve({}); };
-    document.head.appendChild(s);
-  });
+      }
+    });
+    return out;
+  } catch (e) {
+    return {};
+  }
 }
 
 /* ============ 主流程 ============ */
