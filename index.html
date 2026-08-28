@@ -242,9 +242,12 @@ function tsToDate(ts) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// pingzhongdata 的 stockCodes 元素格式：代码+市场（末位 1=沪 0=深/北），北交所按 92/43/83/87/88 开头识别
+// pingzhongdata 的 stockCodes 元素格式：
+// A股 = 代码+市场（末位 1=沪 0=深/北），北交所按 92/43/83/87/88 开头识别
+// 港股 = 5位代码 + "116"（东方财富港股市场标识），腾讯行情用 hk 前缀
 function stockSec(item) {
   const s = String(item);
+  if (s.endsWith('116')) return 'hk' + s.slice(0, -3);
   const gpdm = s.slice(0, -1);
   const market = s.slice(-1);
   if (market === '1') return 'sh' + gpdm;
@@ -522,7 +525,7 @@ function renderStocks(c) {
   const items = c.stocks.map(item => {
     const sec = stockSec(item);
     const q = c.quotes[sec];
-    const gpdm = String(item).slice(0, -1);
+    const gpdm = sec.slice(2);
     return `
       <div class="stock-item">
         <div class="sname"><span>${gpdm}</span><span style="font-size:11px;color:#8a8f99">${sec}</span></div>
