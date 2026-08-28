@@ -300,14 +300,25 @@ function loadPositions(code) {
   });
 }
 
-// 腾讯股票实时行情（fetch + GBK 解码；该接口返回 text/html MIME，script 标签会被浏览器拒绝执行，故用 fetch）
+// 腾讯股票实时行情（fetch + 自定义 GBK→ASCII 解码；接口返回 text/html MIME，script 标签会被浏览器拒绝执行，故用 fetch）
+// 行情只需数字字段（价格/涨跌幅均为 ASCII），跳过 GBK 双字节中文即可，避免依赖 TextDecoder('gbk')（部分内核不支持）
+function gbkAscii(buf) {
+  const bytes = new Uint8Array(buf);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] < 0x80) out += String.fromCharCode(bytes[i]);
+    else i++;  // 跳过 GBK 双字节中文字符
+  }
+  return out;
+}
+
 async function loadQuotes(secs) {
   if (!secs.length) return {};
   try {
     const url = 'https://qt.gtimg.cn/q=' + secs.join(',') + '&r=' + Date.now();
     const resp = await fetch(url);
     const buf = await resp.arrayBuffer();
-    const text = new TextDecoder('gbk').decode(buf);
+    const text = gbkAscii(buf);
     const out = {};
     secs.forEach(sec => {
       const m = text.match(new RegExp('v_' + sec + '="([^"]*)"'));
