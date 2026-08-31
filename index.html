@@ -77,6 +77,11 @@
   .down { color: var(--down); }
   .flat { color: var(--muted); }
 
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--accent); }
+  .sort-arrow { display: inline-block; margin-left: 4px; font-size: 11px; color: var(--muted); }
+  th.sortable.active .sort-arrow { color: var(--accent); }
+
   /* 持仓股票展开行 */
   .stock-row { display: none; }
   .stock-row.open { display: table-row; }
@@ -160,7 +165,9 @@
             <th>持有金额</th>
             <th>已投本金</th>
             <th>持有收益</th>
-            <th>今日估算</th>
+            <th class="sortable" data-sort="est" title="按今日估算涨跌幅排序">今日估算<span class="sort-arrow">↕</span></th>
+            <th class="sortable" data-sort="last" title="上一个交易日净值结算收益率">上日结算<span class="sort-arrow">↕</span></th>
+            <th class="sortable" data-sort="month" title="近一个月收益率">近一月收益<span class="sort-arrow">↕</span></th>
             <th></th>
           </tr>
         </thead>
@@ -386,6 +393,14 @@ function calcFund(c) {
   // 今日估算净值
   const estNav = lastNav > 0 ? lastNav * (1 + estPct / 100) : 0;
 
+  // 近一月收益率（约 22 个交易日）
+  let monthReturn = null;
+  if (trend.length >= 2) {
+    const baseIdx = Math.max(0, trend.length - 22);
+    const baseNav = num(trend[baseIdx].y);
+    if (baseNav > 0) monthReturn = (lastNav / baseNav - 1) * 100;
+  }
+
   // 份额与本金
   const shares = num(f.shares);
   const principal = num(f.principal);
@@ -410,7 +425,7 @@ function calcFund(c) {
     code: f.code, name: c.name, trend, stocks: c.stocks, quotes: c.quotes,
     targetWeight: num(f.targetWeight),
     marketValue, principal, profit, profitPct,
-    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, estCount, hasEstimate
+    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, monthReturn, estCount, hasEstimate
   };
 }
 
@@ -469,14 +484,35 @@ function renderReport(rows, totalMarket, totalProfit, totalEst, totalPrincipal) 
   el.innerHTML = html;
 }
 
+let sortState = { key: null, dir: 1 };
+
+function sortRows(rows) {
+  if (!sortState.key) return rows;
+  const key = sortState.key;
+  const dir = sortState.dir;
+  const val = r => {
+    const c = r.calc;
+    if (key === 'est') return c.hasEstimate ? c.estPct : -Infinity;
+    if (key === 'last') return c.lastNav > 0 ? c.lastReturn : -Infinity;
+    if (key === 'month') return c.monthReturn != null ? c.monthReturn : -Infinity;
+    return 0;
+  };
+  return rows.slice().sort((a, b) => (val(b) - val(a)) * dir);
+}
+
 function renderTable(rows, totalMarket) {
   const tbody = document.getElementById('fundTable');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8a8f99;padding:24px;">暂无数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#8a8f99;padding:24px;">暂无数据</td></tr>';
     return;
   }
-  tbody.innerHTML = rows.map((r, idx) => {
+
+  const sorted = sortRows(rows);
+
+  tbody.innerHTML = sorted.map((r, idx) => {
     const c = r.calc;
+    const lastCell = c.lastNav > 0 ? `<span class="${cls(c.lastReturn)}">${fmtPct(c.lastReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
+    const monthCell = c.monthReturn != null ? `<span class="${cls(c.monthReturn)}">${fmtPct(c.monthReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
     return `
     <tr class="row" data-idx="${idx}">
       <td class="fund-cell">
@@ -487,17 +523,19 @@ function renderTable(rows, totalMarket) {
       <td>${c.principal > 0 ? fmtMoney(c.principal) : '<span style="color:#c4c9d4">--</span>'}</td>
       <td class="${cls(c.profit)}">${c.profit !== 0 ? signNum(c.profit) : '--'}${c.profitPct ? ' <span style="font-size:11px">' + fmtPct(c.profitPct) + '</span>' : ''}</td>
       <td class="${c.hasEstimate ? cls(c.estPct) : 'flat'}">${c.hasEstimate ? signNum(c.estProfit) + ' <span style="font-size:11px">' + fmtPct(c.estPct) + '</span>' : '<span style="color:#c4c9d4">暂无</span>'}</td>
+      <td class="${c.lastNav > 0 ? cls(c.lastReturn) : 'flat'}">${lastCell}</td>
+      <td class="${c.monthReturn != null ? cls(c.monthReturn) : 'flat'}">${monthCell}</td>
       <td><button class="expand-btn" data-idx="${idx}">持仓</button></td>
     </tr>
     <tr class="stock-row" id="stock-${idx}">
-      <td colspan="6">${renderStocks(c)}</td>
+      <td colspan="8">${renderStocks(c)}</td>
     </tr>`;
   }).join('');
 
   // 合计行
-  const totalProfit = rows.reduce((s, r) => s + r.calc.profit, 0);
-  const totalEst = rows.reduce((s, r) => s + r.calc.estProfit, 0);
-  const totalPrincipal = rows.reduce((s, r) => s + r.calc.principal, 0);
+  const totalProfit = sorted.reduce((s, r) => s + r.calc.profit, 0);
+  const totalEst = sorted.reduce((s, r) => s + r.calc.estProfit, 0);
+  const totalPrincipal = sorted.reduce((s, r) => s + r.calc.principal, 0);
   tbody.innerHTML += `
     <tr style="font-weight:700;background:#fafbfc;">
       <td class="fund-cell">合计</td>
@@ -505,6 +543,8 @@ function renderTable(rows, totalMarket) {
       <td>${fmtMoney(totalPrincipal)}</td>
       <td class="${cls(totalProfit)}">${signNum(totalProfit)}</td>
       <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
+      <td></td>
+      <td></td>
       <td></td>
     </tr>`;
 
@@ -616,6 +656,25 @@ document.getElementById('btnSave').addEventListener('click', () => {
 });
 
 document.getElementById('btnRefresh').addEventListener('click', buildAll);
+
+/* ============ 表头排序 ============ */
+function updateSortArrows() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const key = th.getAttribute('data-sort');
+    const arrow = th.querySelector('.sort-arrow');
+    th.classList.toggle('active', sortState.key === key);
+    if (arrow) arrow.textContent = sortState.key === key ? (sortState.dir === 1 ? '↓' : '↑') : '↕';
+  });
+}
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.getAttribute('data-sort');
+    if (sortState.key === key) sortState.dir = -sortState.dir;
+    else { sortState.key = key; sortState.dir = 1; }
+    updateSortArrows();
+    render(getFunds());
+  });
+});
 
 /* ============ 初始化 ============ */
 document.getElementById('dateLabel').textContent = todayStr();
