@@ -37,6 +37,11 @@
   .dot.live { background: #1f9d55; box-shadow: 0 0 0 3px rgba(31,157,85,.15); animation: pulse 1.8s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 
+  /* 页面切换 tabs */
+  .tabs { display: flex; gap: 4px; background: #eef1f5; padding: 4px; border-radius: 10px; }
+  .tab { border: none; background: transparent; color: var(--muted); padding: 6px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .tab.active { background: #fff; color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
   /* 卡片通用 */
   .card { background: var(--card); border: 1px solid #eef1f5; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.04); padding: 18px 20px; margin-bottom: 16px; }
   .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--text); }
@@ -49,7 +54,7 @@
   .report .hl { font-weight: 600; }
 
   /* 汇总卡片 */
-  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
   .stat { background: #2B85FF; border: 1px solid #2B85FF; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
   .stat .label { font-size: 12px; color: rgba(255,255,255,.85); margin-bottom: 6px; }
   .stat .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
@@ -62,11 +67,11 @@
   /* 表格 */
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   thead th {
-    text-align: right; font-weight: 500; color: var(--muted); font-size: 12px;
+    text-align: center; font-weight: 500; color: var(--muted); font-size: 12px;
     padding: 10px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
   }
-  thead th:first-child, thead th:nth-child(2) { text-align: left; }
-  tbody td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  thead th:first-child { text-align: left; }
+  tbody td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
   tbody td.fund-cell { text-align: left; }
   tbody td.weight-cell { text-align: left; }
   .fname { font-weight: 600; }
@@ -120,26 +125,56 @@
   .add-row input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 
   .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* 净值图表弹窗 */
+  .chart-modal { max-width: 720px; }
+  .chart-tools { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .chart-tools h3 { font-size: 16px; margin: 0; }
+  .chart-period { display: flex; gap: 6px; }
+  .chart-period button { border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 4px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  .chart-period button.active { background: var(--accent-weak); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  #chartBox { width: 100%; height: 380px; }
+
+  /* 登录/注册页 */
+  #authPage { position: fixed; inset: 0; z-index: 100; background: linear-gradient(135deg, #2B85FF 0%, #1a5fd0 100%); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #authPage.hidden { display: none; }
+  .auth-card { background: #fff; border-radius: 18px; padding: 32px 28px; width: 360px; max-width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .auth-logo { text-align: center; font-size: 20px; font-weight: 700; color: #2B85FF; margin-bottom: 20px; letter-spacing: 1px; }
+  .auth-tabs { display: flex; gap: 4px; background: #eef1f5; padding: 4px; border-radius: 10px; margin-bottom: 18px; }
+  .auth-tabs button { flex: 1; border: none; background: transparent; color: var(--muted); padding: 8px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .auth-tabs button.active { background: #fff; color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .auth-field { margin-bottom: 12px; }
+  .auth-field input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .auth-msg { min-height: 20px; margin-top: 10px; font-size: 13px; color: var(--up); text-align: center; }
+  .user-chip { font-size: 13px; color: #5b6b66; background: #eef1f5; padding: 4px 10px; border-radius: 20px; }
   @media (max-width: 720px) {
     .summary { grid-template-columns: repeat(2, 1fr); }
     table { font-size: 12px; }
     thead th, tbody td { padding: 8px 4px; }
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>居守的理财追踪</h1>
+    <div class="tabs">
+      <button class="tab active" data-page="hold">持仓</button>
+      <button class="tab" data-page="watch">自选</button>
+    </div>
     <div class="meta">
       <button class="primary btn-sm" id="btnAddTop">添加基金</button>
       <button class="primary btn-sm" id="btnRefresh">立即刷新</button>
       <span id="dateLabel"></span>
       <span class="dot" id="liveDot"></span>
       <span id="updateTime">正在加载数据…</span>
+      <span class="user-chip"><span id="userLabel"></span></span>
+      <button class="ghost btn-sm" id="btnLogout">退出</button>
     </div>
   </header>
 
+  <div id="page-hold">
   <!-- 每日早报 -->
   <section class="card report">
     <h2>每日早报 <span class="tag">截止昨日 24:00 持仓现状</span></h2>
@@ -149,8 +184,6 @@
   <!-- 汇总 -->
   <section class="summary">
     <div class="stat"><div class="label">总持有金额</div><div class="value" id="sMarket">--</div><div class="sub" id="sMarketSub">--</div></div>
-    <div class="stat"><div class="label">已投本金</div><div class="value" id="sPrincipal">--</div><div class="sub">累计投入</div></div>
-    <div class="stat"><div class="label">持有收益</div><div class="value" id="sProfit">--</div><div class="sub" id="sProfitSub">--</div></div>
     <div class="stat"><div class="label">今日估算</div><div class="value" id="sEstimate">--</div><div class="sub" id="sEstimateSub">--</div></div>
   </section>
 
@@ -163,8 +196,6 @@
           <tr>
             <th>基金</th>
             <th>持有金额</th>
-            <th>已投本金</th>
-            <th>持有收益</th>
             <th class="sortable" data-sort="est" title="按今日估算涨跌幅排序">今日估算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="last" title="上一个交易日净值结算收益率">上日结算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="month" title="近一个月收益率">近一月收益<span class="sort-arrow">↕</span></th>
@@ -176,6 +207,47 @@
     </div>
     <p class="hint">点击「持仓」可查看每只基金的重仓股票及当日实时估算。数据盘中每 60 秒自动刷新。</p>
   </section>
+  </div>
+
+  <!-- 自选 -->
+  <div id="page-watch" style="display:none;">
+    <section class="card">
+      <h2>自选基金 <span class="tag" id="watchCount">--</span></h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>基金</th>
+              <th class="sortable" data-sort="west">今日估算</th>
+              <th class="sortable" data-sort="wday">日收益</th>
+              <th class="sortable" data-sort="wmonth">月收益</th>
+              <th class="sortable" data-sort="wyear">年收益</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="watchTable"></tbody>
+        </table>
+      </div>
+      <p class="hint">点击「图表」查看该基金日线/周线/月线净值走势。自选数据盘中每 60 秒自动刷新。</p>
+    </section>
+  </div>
+</div>
+
+<!-- 登录/注册页 -->
+<div id="authPage">
+  <div class="auth-card">
+    <div class="auth-logo">居守的理财追踪</div>
+    <div class="auth-tabs">
+      <button id="authTabLogin" class="active">登录</button>
+      <button id="authTabReg">注册</button>
+    </div>
+    <div class="auth-field"><input id="authUser" placeholder="用户名" autocomplete="username"></div>
+    <div class="auth-field"><input id="authPass" type="password" placeholder="密码" autocomplete="current-password"></div>
+    <div class="auth-field"><input id="authPass2" type="password" placeholder="确认密码" style="display:none;"></div>
+    <button class="primary" id="authSubmit" style="width:100%">登录</button>
+    <div id="authMsg" class="auth-msg"></div>
+    <p class="hint" style="text-align:center">账号数据保存在本浏览器，不同账号持仓/自选相互隔离。</p>
+  </div>
 </div>
 
 <!-- 管理基金弹窗 -->
@@ -196,9 +268,48 @@
   </div>
 </div>
 
+<!-- 管理自选弹窗 -->
+<div class="mask" id="watchMask">
+  <div class="modal">
+    <h3>管理自选</h3>
+    <div class="form-row"><label>填写说明</label><span class="hint">自选仅用于关注涨跌表现，不涉及持仓金额。输入代码可自动获取基金名称。</span></div>
+    <div class="fund-list" id="watchList"></div>
+    <div class="add-row">
+      <input id="watchAddCode" placeholder="基金代码，如 017745">
+      <input id="watchAddName" placeholder="基金名称（自动获取）">
+      <button class="primary" id="btnWatchAdd">添加</button>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" id="btnWatchCancel">取消</button>
+      <button class="primary" id="btnWatchSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 净值图表弹窗 -->
+<div class="mask" id="chartMask">
+  <div class="modal chart-modal">
+    <div class="chart-tools">
+      <h3 id="chartTitle">净值走势</h3>
+      <div class="chart-period">
+        <button data-p="day" class="active">日线</button>
+        <button data-p="week">周线</button>
+        <button data-p="month">月线</button>
+      </div>
+    </div>
+    <div id="chartBox"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="btnChartClose">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ 常量与数据 ============ */
 const STORE_KEY = 'jushou_funds_v1';
+const WATCH_KEY = 'jushou_watchlist_v1';
+const USERS_KEY = 'jushou_users_v1';
+const SESSION_KEY = 'jushou_session_v1';
 
 // 预置的居守持仓基金（代码 + 名称），本金/份额由用户后续填写
 const DEFAULT_FUNDS = [
@@ -223,14 +334,29 @@ const DEFAULT_FUNDS = [
   { code: '016971', name: '华夏恒生生物科技ETF发起式联接' },
 ];
 
+function currentUser() {
+  return localStorage.getItem(SESSION_KEY) || '';
+}
+function fundsKey(u) { return u ? STORE_KEY + '_' + u : STORE_KEY; }
+function watchKey(u) { return u ? WATCH_KEY + '_' + u : WATCH_KEY; }
+
 function getFunds() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(fundsKey(currentUser()));
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return DEFAULT_FUNDS.map(f => ({ code: f.code, name: f.name, targetWeight: '', principal: '', shares: '' }));
 }
-function saveFunds(funds) { localStorage.setItem(STORE_KEY, JSON.stringify(funds)); }
+function saveFunds(funds) { localStorage.setItem(fundsKey(currentUser()), JSON.stringify(funds)); }
+
+function getWatch() {
+  try {
+    const raw = localStorage.getItem(watchKey(currentUser()));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+}
+function saveWatch(list) { localStorage.setItem(watchKey(currentUser()), JSON.stringify(list)); }
 
 /* ============ 工具函数 ============ */
 function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
@@ -401,6 +527,14 @@ function calcFund(c) {
     if (baseNav > 0) monthReturn = (lastNav / baseNav - 1) * 100;
   }
 
+  // 近一年收益率（约 244 个交易日）
+  let yearReturn = null;
+  if (trend.length >= 2) {
+    const baseIdx = Math.max(0, trend.length - 244);
+    const baseNav = num(trend[baseIdx].y);
+    if (baseNav > 0) yearReturn = (lastNav / baseNav - 1) * 100;
+  }
+
   // 份额与本金
   const shares = num(f.shares);
   const principal = num(f.principal);
@@ -410,22 +544,14 @@ function calcFund(c) {
   if (shares > 0 && lastNav > 0) marketValue = shares * lastNav;
   else if (principal > 0) marketValue = principal;
 
-  // 持有收益
-  let profit = 0, profitPct = 0;
-  if (shares > 0 && lastNav > 0) {
-    const costNav = principal / shares;             // 成本净值
-    profit = shares * (lastNav - costNav);
-    profitPct = costNav > 0 ? (lastNav / costNav - 1) * 100 : 0;
-  }
-
   // 今日估算收益（金额）
   const estProfit = marketValue * (estPct / 100);
 
   return {
     code: f.code, name: c.name, trend, stocks: c.stocks, quotes: c.quotes,
     targetWeight: num(f.targetWeight),
-    marketValue, principal, profit, profitPct,
-    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, monthReturn, estCount, hasEstimate
+    marketValue,
+    estPct, estProfit, estNav, lastNav, lastDate, lastReturn, monthReturn, yearReturn, estCount, hasEstimate
   };
 }
 
@@ -438,31 +564,24 @@ function render(funds) {
   }).filter(Boolean);
 
   const totalMarket = rows.reduce((s, r) => s + r.calc.marketValue, 0);
-  const totalPrincipal = rows.reduce((s, r) => s + r.calc.principal, 0);
-  const totalProfit = rows.reduce((s, r) => s + r.calc.profit, 0);
   const totalEst = rows.reduce((s, r) => s + r.calc.estProfit, 0);
 
   // 汇总卡片
   document.getElementById('sMarket').textContent = fmtMoney(totalMarket);
   document.getElementById('sMarketSub').textContent = '按最新净值估算';
-  document.getElementById('sPrincipal').textContent = fmtMoney(totalPrincipal);
-  document.getElementById('sProfit').textContent = (totalProfit >= 0 ? '+' : '') + fmtMoney(totalProfit);
-  document.getElementById('sProfit').className = 'value ' + cls(totalProfit);
-  document.getElementById('sProfitSub').textContent = totalPrincipal > 0 ? fmtPct(totalProfit / totalPrincipal * 100) : '--';
-  document.getElementById('sProfitSub').className = 'sub ' + cls(totalProfit);
   document.getElementById('sEstimate').textContent = (totalEst >= 0 ? '+' : '') + fmtMoney(totalEst);
   document.getElementById('sEstimate').className = 'value ' + cls(totalEst);
   document.getElementById('sEstimateSub').textContent = '重仓股加权估算';
   document.getElementById('fundCount').textContent = rows.length + ' 只基金';
 
   // 早报
-  renderReport(rows, totalMarket, totalProfit, totalEst, totalPrincipal);
+  renderReport(rows, totalMarket, totalEst);
 
   // 表格
   renderTable(rows, totalMarket);
 }
 
-function renderReport(rows, totalMarket, totalProfit, totalEst, totalPrincipal) {
+function renderReport(rows, totalMarket, totalEst) {
   const el = document.getElementById('reportBody');
   if (!rows.length) { el.innerHTML = '<p class="hint">暂无基金数据，请点击「管理基金」添加。</p>'; return; }
 
@@ -472,12 +591,11 @@ function renderReport(rows, totalMarket, totalProfit, totalEst, totalPrincipal) 
   const upCount = rows.filter(r => r.calc.lastReturn > 0).length;
   const downCount = rows.filter(r => r.calc.lastReturn < 0).length;
 
-  const profitRate = totalPrincipal > 0 ? totalProfit / totalPrincipal * 100 : 0;
   const todayPct = totalMarket > 0 ? totalEst / totalMarket * 100 : 0;
 
   let html = '';
-  html += `<p>截至昨日收盘，共持有 <span class="hl">${rows.length}</span> 只基金，总市值 <span class="hl">${fmtMoney(totalMarket)}</span>，累计投入本金 <span class="hl">${fmtMoney(totalPrincipal)}</span>。</p>`;
-  html += `<p>持有收益 <span class="${cls(totalProfit)} hl-${cls(totalProfit)}">${signNum(totalProfit)} 元（${fmtPct(profitRate)}）</span>，昨日 ${upCount} 涨 ${downCount} 跌。</p>`;
+  html += `<p>截至昨日收盘，共持有 <span class="hl">${rows.length}</span> 只基金，总市值 <span class="hl">${fmtMoney(totalMarket)}</span>。</p>`;
+  html += `<p>昨日 <span class="hl">${upCount}</span> 涨 <span class="hl">${downCount}</span> 跌。</p>`;
   if (topGain && topGain.calc.lastReturn !== 0) html += `<p>昨日涨幅居前：<span class="hl-up">${topGain.calc.name}（${fmtPct(topGain.calc.lastReturn)}）</span>。</p>`;
   if (topLoss && topLoss.calc.lastReturn !== 0) html += `<p>昨日跌幅居前：<span class="hl-down">${topLoss.calc.name}（${fmtPct(topLoss.calc.lastReturn)}）</span>。</p>`;
   html += `<p>今日盘中估算：整体约 <span class="${cls(totalEst)}">${signNum(totalEst)} 元（${fmtPct(todayPct)}）</span>，基于重仓股实时行情加权测算，仅供盘中参考。</p>`;
@@ -503,7 +621,7 @@ function sortRows(rows) {
 function renderTable(rows, totalMarket) {
   const tbody = document.getElementById('fundTable');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#8a8f99;padding:24px;">暂无数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8a8f99;padding:24px;">暂无数据</td></tr>';
     return;
   }
 
@@ -520,28 +638,22 @@ function renderTable(rows, totalMarket) {
         <div class="fcode">${c.code}</div>
       </td>
       <td>${fmtMoney(c.marketValue)}</td>
-      <td>${c.principal > 0 ? fmtMoney(c.principal) : '<span style="color:#c4c9d4">--</span>'}</td>
-      <td class="${cls(c.profit)}">${c.profit !== 0 ? signNum(c.profit) : '--'}${c.profitPct ? ' <span style="font-size:11px">' + fmtPct(c.profitPct) + '</span>' : ''}</td>
       <td class="${c.hasEstimate ? cls(c.estPct) : 'flat'}">${c.hasEstimate ? signNum(c.estProfit) + ' <span style="font-size:11px">' + fmtPct(c.estPct) + '</span>' : '<span style="color:#c4c9d4">暂无</span>'}</td>
       <td class="${c.lastNav > 0 ? cls(c.lastReturn) : 'flat'}">${lastCell}</td>
       <td class="${c.monthReturn != null ? cls(c.monthReturn) : 'flat'}">${monthCell}</td>
       <td><button class="expand-btn" data-idx="${idx}">持仓</button></td>
     </tr>
     <tr class="stock-row" id="stock-${idx}">
-      <td colspan="8">${renderStocks(c)}</td>
+      <td colspan="6">${renderStocks(c)}</td>
     </tr>`;
   }).join('');
 
   // 合计行
-  const totalProfit = sorted.reduce((s, r) => s + r.calc.profit, 0);
   const totalEst = sorted.reduce((s, r) => s + r.calc.estProfit, 0);
-  const totalPrincipal = sorted.reduce((s, r) => s + r.calc.principal, 0);
   tbody.innerHTML += `
     <tr style="font-weight:700;background:#fafbfc;">
       <td class="fund-cell">合计</td>
       <td>${fmtMoney(totalMarket)}</td>
-      <td>${fmtMoney(totalPrincipal)}</td>
-      <td class="${cls(totalProfit)}">${signNum(totalProfit)}</td>
       <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
       <td></td>
       <td></td>
@@ -623,7 +735,10 @@ function renderEditor() {
   });
 }
 
-document.getElementById('btnAddTop').addEventListener('click', openEditor);
+document.getElementById('btnAddTop').addEventListener('click', () => {
+  if (currentPage === 'watch') openWatchEditor();
+  else openEditor();
+});
 document.getElementById('btnCancel').addEventListener('click', closeEditor);
 document.getElementById('mask').addEventListener('click', e => { if (e.target.id === 'mask') closeEditor(); });
 document.getElementById('btnAdd').addEventListener('click', async () => {
@@ -655,18 +770,21 @@ document.getElementById('btnSave').addEventListener('click', () => {
   buildAll();
 });
 
-document.getElementById('btnRefresh').addEventListener('click', buildAll);
+document.getElementById('btnRefresh').addEventListener('click', () => {
+  if (currentPage === 'watch') buildWatch();
+  else buildAll();
+});
 
 /* ============ 表头排序 ============ */
 function updateSortArrows() {
-  document.querySelectorAll('th.sortable').forEach(th => {
+  document.querySelectorAll('#page-hold th.sortable').forEach(th => {
     const key = th.getAttribute('data-sort');
     const arrow = th.querySelector('.sort-arrow');
     th.classList.toggle('active', sortState.key === key);
     if (arrow) arrow.textContent = sortState.key === key ? (sortState.dir === 1 ? '↓' : '↑') : '↕';
   });
 }
-document.querySelectorAll('th.sortable').forEach(th => {
+document.querySelectorAll('#page-hold th.sortable').forEach(th => {
   th.addEventListener('click', () => {
     const key = th.getAttribute('data-sort');
     if (sortState.key === key) sortState.dir = -sortState.dir;
@@ -676,10 +794,403 @@ document.querySelectorAll('th.sortable').forEach(th => {
   });
 });
 
+/* ============ 页面切换 ============ */
+let currentPage = 'hold';
+function switchPage(page) {
+  currentPage = page;
+  document.getElementById('page-hold').style.display = page === 'hold' ? '' : 'none';
+  document.getElementById('page-watch').style.display = page === 'watch' ? '' : 'none';
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-page') === page));
+  document.getElementById('btnAddTop').textContent = page === 'hold' ? '添加基金' : '添加自选';
+}
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    const p = t.getAttribute('data-page');
+    switchPage(p);
+    if (p === 'watch') {
+      if (watchLoaded) renderWatch();
+      else buildWatch();
+    } else {
+      if (Object.keys(cache).length) render(getFunds());
+      else buildAll();
+    }
+  });
+});
+
+/* ============ 自选基金 ============ */
+let watchCache = {};   // code -> { fund, name, trend, stocks, quotes }
+let watchLoaded = false;
+let watchSort = { key: null, dir: 1 };
+
+async function buildWatch() {
+  const list = getWatch();
+  setLive(true, '正在抓取自选数据…');
+  if (!list.length) {
+    watchLoaded = true;
+    renderWatch();
+    setLive(true, '已更新');
+    return;
+  }
+  try {
+    const infos = [];
+    for (const f of list) {
+      const info = await loadFundPingzhong(f.code);
+      infos.push(info);
+    }
+    const secSet = new Set();
+    list.forEach((f, i) => {
+      const info = infos[i];
+      const codes = (info && info.stockCodes) || [];
+      codes.forEach(item => { if (item) secSet.add(stockSec(item)); });
+    });
+    const quotes = await loadQuotes([...secSet]);
+    list.forEach((f, i) => {
+      const info = infos[i];
+      watchCache[f.code] = {
+        fund: f,
+        name: (info && info.name) || f.name,
+        trend: (info && info.trend) || [],
+        stocks: (info && info.stockCodes) || [],
+        quotes: quotes
+      };
+    });
+    watchLoaded = true;
+    renderWatch();
+    setLive(true, '已更新');
+  } catch (e) {
+    setLive(false, '自选加载失败：' + e.message);
+  }
+}
+
+function renderWatch() {
+  const list = getWatch();
+  const tbody = document.getElementById('watchTable');
+  document.getElementById('watchCount').textContent = list.length + ' 只自选';
+
+  const rows = list.map(f => {
+    const c = watchCache[f.code];
+    if (!c) return null;
+    return { calc: calcFund(c) };
+  }).filter(Boolean);
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8a8f99;padding:24px;">暂无自选，点击右上角「添加自选」。</td></tr>';
+    return;
+  }
+
+  const sorted = rows.slice().sort((a, b) => {
+    if (!watchSort.key) return 0;
+    const val = r => {
+      const c = r.calc;
+      if (watchSort.key === 'west') return c.hasEstimate ? c.estPct : -Infinity;
+      if (watchSort.key === 'wday') return c.lastNav > 0 ? c.lastReturn : -Infinity;
+      if (watchSort.key === 'wmonth') return c.monthReturn != null ? c.monthReturn : -Infinity;
+      if (watchSort.key === 'wyear') return c.yearReturn != null ? c.yearReturn : -Infinity;
+      return 0;
+    };
+    return (val(b) - val(a)) * watchSort.dir;
+  });
+
+  tbody.innerHTML = sorted.map(r => {
+    const c = r.calc;
+    const estCell = c.hasEstimate ? `<span class="${cls(c.estPct)}">${fmtPct(c.estPct)}</span>` : '<span style="color:#c4c9d4">--</span>';
+    const dayCell = c.lastNav > 0 ? `<span class="${cls(c.lastReturn)}">${fmtPct(c.lastReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
+    const monthCell = c.monthReturn != null ? `<span class="${cls(c.monthReturn)}">${fmtPct(c.monthReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
+    const yearCell = c.yearReturn != null ? `<span class="${cls(c.yearReturn)}">${fmtPct(c.yearReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
+    return `
+    <tr class="row">
+      <td class="fund-cell">
+        <div class="fname">${escapeHtml(c.name)}</div>
+        <div class="fcode">${c.code}</div>
+      </td>
+      <td>${estCell}</td>
+      <td>${dayCell}</td>
+      <td>${monthCell}</td>
+      <td>${yearCell}</td>
+      <td><button class="expand-btn" data-code="${c.code}">图表</button></td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.expand-btn').forEach(btn => {
+    btn.addEventListener('click', () => openChart(btn.getAttribute('data-code')));
+  });
+}
+
+/* ============ 管理自选弹窗 ============ */
+let editWatch = [];
+function openWatchEditor() {
+  editWatch = getWatch().map(f => ({ ...f }));
+  renderWatchEditor();
+  document.getElementById('watchMask').classList.add('open');
+}
+function closeWatchEditor() { document.getElementById('watchMask').classList.remove('open'); }
+function renderWatchEditor() {
+  const el = document.getElementById('watchList');
+  el.innerHTML = editWatch.map((f, i) => `
+    <div class="fund-edit-item">
+      <div class="fi-name">${escapeHtml(f.name || '未命名')}<div class="fi-code">${escapeHtml(f.code)}</div></div>
+      <button data-del="${i}">删除</button>
+    </div>`).join('') || '<div class="hint" style="padding:16px;text-align:center">暂无自选，请在下方添加</div>';
+  el.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editWatch.splice(+btn.getAttribute('data-del'), 1);
+      renderWatchEditor();
+    });
+  });
+}
+document.getElementById('btnWatchCancel').addEventListener('click', closeWatchEditor);
+document.getElementById('watchMask').addEventListener('click', e => { if (e.target.id === 'watchMask') closeWatchEditor(); });
+document.getElementById('btnWatchAdd').addEventListener('click', async () => {
+  const code = document.getElementById('watchAddCode').value.trim();
+  const name = document.getElementById('watchAddName').value.trim();
+  if (!code) { alert('请输入基金代码'); return; }
+  let finalName = name;
+  if (!finalName) {
+    const info = await loadFundPingzhong(code);
+    finalName = (info && info.name) || code;
+  }
+  editWatch.push({ code, name: finalName });
+  document.getElementById('watchAddCode').value = '';
+  document.getElementById('watchAddName').value = '';
+  renderWatchEditor();
+});
+document.getElementById('watchAddCode').addEventListener('blur', async () => {
+  const code = document.getElementById('watchAddCode').value.trim();
+  const nameInput = document.getElementById('watchAddName');
+  if (code && !nameInput.value) {
+    const info = await loadFundPingzhong(code);
+    if (info && info.name) nameInput.value = info.name;
+  }
+});
+document.getElementById('btnWatchSave').addEventListener('click', () => {
+  saveWatch(editWatch);
+  closeWatchEditor();
+  buildWatch();
+});
+document.querySelectorAll('#page-watch th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.getAttribute('data-sort');
+    if (watchSort.key === key) watchSort.dir = -watchSort.dir;
+    else { watchSort.key = key; watchSort.dir = 1; }
+    renderWatch();
+  });
+});
+
+/* ============ 净值图表 ============ */
+let chartInstance = null;
+let chartPeriod = 'day';
+let chartData = null;
+
+function weekKey(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = (d.getDay() + 6) % 7; // 周一 = 0
+  d.setDate(d.getDate() - day);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function aggregateSeries(trend, mode) {
+  if (!trend.length) return { dates: [], navs: [] };
+  const points = trend.map(p => ({ date: tsToDate(p.x), nav: num(p.y) }));
+  if (mode === 'day') {
+    const recent = points.slice(-60);
+    return { dates: recent.map(p => p.date), navs: recent.map(p => p.nav) };
+  }
+  if (mode === 'week') {
+    const byWeek = new Map();
+    points.forEach(p => byWeek.set(weekKey(p.date), p));
+    const arr = [...byWeek.values()].slice(-104);
+    return { dates: arr.map(p => p.date), navs: arr.map(p => p.nav) };
+  }
+  const byMonth = new Map();
+  points.forEach(p => byMonth.set(p.date.slice(0, 7), p));
+  const arr = [...byMonth.values()];
+  return { dates: arr.map(p => p.date), navs: arr.map(p => p.nav) };
+}
+
+function openChart(code) {
+  const c = watchCache[code];
+  if (!c || !c.trend.length) { alert('暂无净值数据'); return; }
+  chartData = c.trend;
+  document.getElementById('chartTitle').textContent = c.name + '（' + code + '）净值走势';
+  chartPeriod = 'day';
+  document.querySelectorAll('.chart-period button').forEach(b => b.classList.toggle('active', b.getAttribute('data-p') === 'day'));
+  document.getElementById('chartMask').classList.add('open');
+  drawChart();
+}
+
+function drawChart() {
+  const box = document.getElementById('chartBox');
+  if (typeof echarts === 'undefined') {
+    box.innerHTML = '<div class="hint" style="text-align:center;padding:40px;">图表组件加载失败，请检查网络后刷新。</div>';
+    return;
+  }
+  const series = aggregateSeries(chartData, chartPeriod);
+  if (!series.dates.length) {
+    box.innerHTML = '<div class="hint" style="text-align:center;padding:40px;">暂无该周期数据。</div>';
+    return;
+  }
+  box.innerHTML = '';
+  if (!chartInstance) chartInstance = echarts.init(box);
+  chartInstance.setOption({
+    grid: { left: 50, right: 20, top: 30, bottom: 40 },
+    tooltip: { trigger: 'axis', formatter: params => { const p = params[0]; return p.axisValue + '<br/>净值：' + fmt(p.value); } },
+    xAxis: { type: 'category', data: series.dates, boundaryGap: false, axisLabel: { color: '#8a8f99' } },
+    yAxis: { type: 'value', scale: true, axisLabel: { color: '#8a8f99' } },
+    series: [{
+      type: 'line', data: series.navs, showSymbol: false,
+      lineStyle: { color: '#2B85FF', width: 2 },
+      areaStyle: { color: 'rgba(43,133,255,.08)' },
+      itemStyle: { color: '#2B85FF' }
+    }]
+  }, true);
+}
+
+document.querySelectorAll('.chart-period button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    chartPeriod = btn.getAttribute('data-p');
+    document.querySelectorAll('.chart-period button').forEach(b => b.classList.toggle('active', b === btn));
+    drawChart();
+  });
+});
+document.getElementById('btnChartClose').addEventListener('click', () => document.getElementById('chartMask').classList.remove('open'));
+document.getElementById('chartMask').addEventListener('click', e => { if (e.target.id === 'chartMask') document.getElementById('chartMask').classList.remove('open'); });
+window.addEventListener('resize', () => { if (chartInstance) chartInstance.resize(); });
+
+/* ============ 认证（本地账号） ============ */
+function getUsers() {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+
+function randomSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPassword(password, salt) {
+  const data = new TextEncoder().encode(salt + ':' + password);
+  if (window.crypto && window.crypto.subtle) {
+    const buf = await window.crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
+  }
+  // fallback：非安全上下文（如 file://）无 subtle，用简单散列兜底
+  let h = 0;
+  const s = salt + ':' + password;
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+  return 'fb' + Math.abs(h).toString(16);
+}
+
+function migrateLegacyData(user) {
+  const fKey = fundsKey(user), wKey = watchKey(user);
+  if (!localStorage.getItem(fKey)) {
+    const legacy = localStorage.getItem(STORE_KEY);
+    if (legacy) { localStorage.setItem(fKey, legacy); localStorage.removeItem(STORE_KEY); }
+  }
+  if (!localStorage.getItem(wKey)) {
+    const legacyW = localStorage.getItem(WATCH_KEY);
+    if (legacyW) { localStorage.setItem(wKey, legacyW); localStorage.removeItem(WATCH_KEY); }
+  }
+}
+
+function setSession(user) { localStorage.setItem(SESSION_KEY, user); }
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+async function doLogin(username, password) {
+  const users = getUsers();
+  const u = users[username];
+  if (!u) return '用户名不存在，请先注册';
+  const hash = await hashPassword(password, u.salt);
+  if (hash !== u.hash) return '密码错误';
+  setSession(username);
+  migrateLegacyData(username);
+  return null;
+}
+
+async function doRegister(username, password) {
+  const users = getUsers();
+  if (users[username]) return '该用户名已被注册';
+  const salt = randomSalt();
+  const hash = await hashPassword(password, salt);
+  users[username] = { salt, hash };
+  saveUsers(users);
+  setSession(username);
+  migrateLegacyData(username);
+  return null;
+}
+
+/* ============ 认证界面 ============ */
+let authMode = 'login';
+function showAuth() { document.getElementById('authPage').classList.remove('hidden'); }
+function hideAuth() { document.getElementById('authPage').classList.add('hidden'); }
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('authTabLogin').classList.toggle('active', mode === 'login');
+  document.getElementById('authTabReg').classList.toggle('active', mode === 'register');
+  document.getElementById('authSubmit').textContent = mode === 'login' ? '登录' : '注册';
+  document.getElementById('authPass2').style.display = mode === 'register' ? '' : 'none';
+  document.getElementById('authMsg').textContent = '';
+}
+document.getElementById('authTabLogin').addEventListener('click', () => setAuthMode('login'));
+document.getElementById('authTabReg').addEventListener('click', () => setAuthMode('register'));
+
+function enterApp() {
+  hideAuth();
+  cache = {}; watchCache = {}; watchLoaded = false;
+  document.getElementById('authUser').value = '';
+  document.getElementById('authPass').value = '';
+  document.getElementById('authPass2').value = '';
+  document.getElementById('userLabel').textContent = currentUser();
+  if (currentPage !== 'hold') switchPage('hold');
+  buildAll();
+}
+
+document.getElementById('authSubmit').addEventListener('click', async () => {
+  const username = document.getElementById('authUser').value.trim();
+  const password = document.getElementById('authPass').value;
+  const password2 = document.getElementById('authPass2').value;
+  const msg = document.getElementById('authMsg');
+  if (!username) { msg.textContent = '请输入用户名'; return; }
+  if (!password) { msg.textContent = '请输入密码'; return; }
+  let err = null;
+  if (authMode === 'register') {
+    if (password.length < 4) { msg.textContent = '密码至少 4 位'; return; }
+    if (password !== password2) { msg.textContent = '两次密码不一致'; return; }
+    err = await doRegister(username, password);
+  } else {
+    err = await doLogin(username, password);
+  }
+  if (err) { msg.textContent = err; return; }
+  enterApp();
+});
+document.getElementById('authPass').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('authSubmit').click(); });
+document.getElementById('authPass2').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('authSubmit').click(); });
+
+document.getElementById('btnLogout').addEventListener('click', () => {
+  clearSession();
+  cache = {}; watchCache = {}; watchLoaded = false;
+  document.getElementById('userLabel').textContent = '';
+  setAuthMode('login');
+  showAuth();
+});
+
 /* ============ 初始化 ============ */
 document.getElementById('dateLabel').textContent = todayStr();
-buildAll();
-setInterval(buildAll, 60000);   // 每 60 秒自动刷新
+switchPage('hold');
+
+if (currentUser()) {
+  hideAuth();
+  document.getElementById('userLabel').textContent = currentUser();
+  buildAll();
+} else {
+  showAuth();
+}
+
+setInterval(() => {
+  if (!currentUser()) return;
+  if (currentPage === 'watch') buildWatch();
+  else buildAll();
+}, 60000);   // 每 60 秒自动刷新
 </script>
 </body>
 </html>
