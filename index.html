@@ -54,7 +54,7 @@
   .report .hl { font-weight: 600; }
 
   /* 汇总卡片 */
-  .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
   .stat { background: #2B85FF; border: 1px solid #2B85FF; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
   .stat .label { font-size: 12px; color: rgba(255,255,255,.85); margin-bottom: 6px; }
   .stat .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
@@ -185,6 +185,8 @@
   <section class="summary">
     <div class="stat"><div class="label">总持有金额</div><div class="value" id="sMarket">--</div><div class="sub" id="sMarketSub">--</div></div>
     <div class="stat"><div class="label">今日估算</div><div class="value" id="sEstimate">--</div><div class="sub" id="sEstimateSub">--</div></div>
+    <div class="stat"><div class="label">昨日结算</div><div class="value" id="sLast">--</div><div class="sub" id="sLastSub">--</div></div>
+    <div class="stat"><div class="label">累计持有收益</div><div class="value" id="sProfit">--</div><div class="sub" id="sProfitSub">--</div></div>
   </section>
 
   <!-- 持仓总览 -->
@@ -196,6 +198,7 @@
           <tr>
             <th>基金</th>
             <th>持有金额</th>
+            <th class="sortable" data-sort="profit" title="结算市值-已投本金，收益率按本金计算">持有收益<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="est" title="按今日估算涨跌幅排序">今日估算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="last" title="上一个交易日净值结算收益率">上日结算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="month" title="近一个月收益率">近一月收益<span class="sort-arrow">↕</span></th>
@@ -539,18 +542,31 @@ function calcFund(c) {
   const shares = num(f.shares);
   const principal = num(f.principal);
 
-  // 持有金额：优先用份额×最新净值，否则用本金近似
+  // 持有金额：份额×最新结算净值（盘中估值不参与），无份额时退回本金
   let marketValue = 0;
   if (shares > 0 && lastNav > 0) marketValue = shares * lastNav;
   else if (principal > 0) marketValue = principal;
 
-  // 今日估算收益（金额）
+  // 持有收益：结算市值 - 已投本金，收益率按本金计
+  const profit = marketValue - principal;
+  const profitRate = principal > 0 ? (profit / principal) * 100 : null;
+
+  // 今日估算收益（金额，仅供盘中参考，不回写持有金额）
   const estProfit = marketValue * (estPct / 100);
+
+  // 昨日结算收益：最近结算日净值变化 × 份额（无份额时退回本金 × 昨日收益率）
+  let lastProfit = 0;
+  if (shares > 0 && trend.length >= 2) {
+    const prevNav = num(trend[trend.length - 2].y);
+    if (lastNav > 0 && prevNav > 0) lastProfit = shares * (lastNav - prevNav);
+  } else if (principal > 0) {
+    lastProfit = principal * lastReturn / 100;
+  }
 
   return {
     code: f.code, name: c.name, trend, stocks: c.stocks, quotes: c.quotes,
     targetWeight: num(f.targetWeight),
-    marketValue,
+    marketValue, principal, profit, profitRate, lastProfit,
     estPct, estProfit, estNav, lastNav, lastDate, lastReturn, monthReturn, yearReturn, estCount, hasEstimate
   };
 }
@@ -566,12 +582,29 @@ function render(funds) {
   const totalMarket = rows.reduce((s, r) => s + r.calc.marketValue, 0);
   const totalEst = rows.reduce((s, r) => s + r.calc.estProfit, 0);
 
+  // 累计持有收益：仅统计已填本金的基金（无本金无法算收益）
+  const pRows = rows.filter(r => r.calc.principal > 0);
+  const totalPrincipal = pRows.reduce((s, r) => s + r.calc.principal, 0);
+  const totalProfit = pRows.reduce((s, r) => s + r.calc.profit, 0);
+  const totalProfitRate = totalPrincipal > 0 ? (totalProfit / totalPrincipal) * 100 : null;
+
+  // 昨日结算收益：较前日市值的涨跌
+  const totalLast = rows.reduce((s, r) => s + r.calc.lastProfit, 0);
+  const prevMarket = totalMarket - totalLast;
+  const totalLastRate = prevMarket > 0 ? (totalLast / prevMarket) * 100 : null;
+
   // 汇总卡片
   document.getElementById('sMarket').textContent = fmtMoney(totalMarket);
-  document.getElementById('sMarketSub').textContent = '按最新净值估算';
+  document.getElementById('sMarketSub').textContent = '按最新结算净值 · 估值不影响';
   document.getElementById('sEstimate').textContent = (totalEst >= 0 ? '+' : '') + fmtMoney(totalEst);
   document.getElementById('sEstimate').className = 'value ' + cls(totalEst);
-  document.getElementById('sEstimateSub').textContent = '重仓股加权估算';
+  document.getElementById('sEstimateSub').textContent = '盘中预估 · 不回写持有金额';
+  document.getElementById('sLast').textContent = (totalLast >= 0 ? '+' : '') + fmtMoney(totalLast);
+  document.getElementById('sLast').className = 'value ' + cls(totalLast);
+  document.getElementById('sLastSub').textContent = totalLastRate != null ? '较前日 ' + fmtPct(totalLastRate) : '--';
+  document.getElementById('sProfit').textContent = (totalProfit >= 0 ? '+' : '') + fmtMoney(totalProfit);
+  document.getElementById('sProfit').className = 'value ' + cls(totalProfit);
+  document.getElementById('sProfitSub').textContent = '总本金 ' + fmtMoney(totalPrincipal) + (totalProfitRate != null ? ' · 收益率 ' + fmtPct(totalProfitRate) : '');
   document.getElementById('fundCount').textContent = rows.length + ' 只基金';
 
   // 早报
@@ -611,6 +644,7 @@ function sortRows(rows) {
   const val = r => {
     const c = r.calc;
     if (key === 'est') return c.hasEstimate ? c.estPct : -Infinity;
+    if (key === 'profit') return c.profitRate != null ? c.profitRate : -Infinity;
     if (key === 'last') return c.lastNav > 0 ? c.lastReturn : -Infinity;
     if (key === 'month') return c.monthReturn != null ? c.monthReturn : -Infinity;
     return 0;
@@ -629,6 +663,7 @@ function renderTable(rows, totalMarket) {
 
   tbody.innerHTML = sorted.map((r, idx) => {
     const c = r.calc;
+    const profitCell = c.profitRate != null ? `<span class="${cls(c.profit)}">${signNum(c.profit)} <span style="font-size:11px">${fmtPct(c.profitRate)}</span></span>` : '<span style="color:#c4c9d4">--</span>';
     const lastCell = c.lastNav > 0 ? `<span class="${cls(c.lastReturn)}">${fmtPct(c.lastReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
     const monthCell = c.monthReturn != null ? `<span class="${cls(c.monthReturn)}">${fmtPct(c.monthReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
     return `
@@ -638,24 +673,28 @@ function renderTable(rows, totalMarket) {
         <div class="fcode">${c.code}</div>
       </td>
       <td>${fmtMoney(c.marketValue)}</td>
+      <td>${profitCell}</td>
       <td class="${c.hasEstimate ? cls(c.estPct) : 'flat'}">${c.hasEstimate ? signNum(c.estProfit) + ' <span style="font-size:11px">' + fmtPct(c.estPct) + '</span>' : '<span style="color:#c4c9d4">暂无</span>'}</td>
       <td class="${c.lastNav > 0 ? cls(c.lastReturn) : 'flat'}">${lastCell}</td>
       <td class="${c.monthReturn != null ? cls(c.monthReturn) : 'flat'}">${monthCell}</td>
       <td><button class="expand-btn" data-idx="${idx}">持仓</button></td>
     </tr>
     <tr class="stock-row" id="stock-${idx}">
-      <td colspan="6">${renderStocks(c)}</td>
+      <td colspan="7">${renderStocks(c)}</td>
     </tr>`;
   }).join('');
 
   // 合计行
   const totalEst = sorted.reduce((s, r) => s + r.calc.estProfit, 0);
+  const totalProfit = sorted.reduce((s, r) => s + (r.calc.principal > 0 ? r.calc.profit : 0), 0);
+  const totalLast = sorted.reduce((s, r) => s + r.calc.lastProfit, 0);
   tbody.innerHTML += `
     <tr style="font-weight:700;background:#fafbfc;">
       <td class="fund-cell">合计</td>
       <td>${fmtMoney(totalMarket)}</td>
+      <td class="${cls(totalProfit)}">${signNum(totalProfit)}</td>
       <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
-      <td></td>
+      <td class="${cls(totalLast)}">${signNum(totalLast)}</td>
       <td></td>
       <td></td>
     </tr>`;
@@ -1191,6 +1230,20 @@ setInterval(() => {
   if (currentPage === 'watch') buildWatch();
   else buildAll();
 }, 60000);   // 每 60 秒自动刷新
+
+// 每日 00:00 按最新结算净值刷新（基金净值通常在 24 点前结算完成）
+function scheduleDailySettle() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 10);
+  setTimeout(() => {
+    if (currentUser()) {
+      if (currentPage === 'watch') buildWatch();
+      else buildAll();
+    }
+    scheduleDailySettle();
+  }, next.getTime() - now.getTime());
+}
+scheduleDailySettle();
 </script>
 </body>
 </html>
