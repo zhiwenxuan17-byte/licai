@@ -198,7 +198,7 @@
           <tr>
             <th>基金</th>
             <th>持有金额</th>
-            <th class="sortable" data-sort="profit" title="结算市值-已投本金，收益率按本金计算">持有收益<span class="sort-arrow">↕</span></th>
+            <th class="sortable" data-sort="settle" title="最近一次结算的涨跌金额（份额×净值变化）">结算收益<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="est" title="按今日估算涨跌幅排序">今日估算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="last" title="上一个交易日净值结算收益率">上日结算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="month" title="近一个月收益率">近一月收益<span class="sort-arrow">↕</span></th>
@@ -257,7 +257,7 @@
 <div class="mask" id="mask">
   <div class="modal">
     <h3>管理基金</h3>
-    <div class="form-row"><label>填写说明</label><span class="hint">本金填元、份额填份。填了份额按「份额×净值」精确算持有金额，否则按本金近似。</span></div>
+    <div class="form-row"><label>填写说明</label><span class="hint">本金填元、份额填份。填了份额按「份额×净值」精确算持有金额；只填本金时，系统会按当前净值自动估算份额，让市值随每日结算变化。</span></div>
     <div class="fund-list" id="fundList"></div>
     <div class="add-row">
       <input id="addCode" placeholder="基金代码，如 017745">
@@ -466,6 +466,21 @@ async function buildAll() {
       fundInfos.push(info);
     }
 
+    // 1.5 只填本金、未填份额的基金：按当前最新净值自动估算份额（本金÷净值），
+    // 使市值 = 份额 × 最新结算净值，能随每日结算变化（否则市值会一直等于本金）
+    let sharesChanged = false;
+    funds.forEach((f, i) => {
+      if (num(f.principal) > 0 && !(num(f.shares) > 0)) {
+        const info = fundInfos[i];
+        const nav = (info && info.trend && info.trend.length) ? num(info.trend[info.trend.length - 1].y) : 0;
+        if (nav > 0) {
+          f.shares = (num(f.principal) / nav).toFixed(4);
+          sharesChanged = true;
+        }
+      }
+    });
+    if (sharesChanged) saveFunds(funds);
+
     // 2. 收集所有基金的重仓股票代码，批量抓行情（stockCodes 来自 pingzhongdata）
     const secSet = new Set();
     funds.forEach((f, i) => {
@@ -644,7 +659,7 @@ function sortRows(rows) {
   const val = r => {
     const c = r.calc;
     if (key === 'est') return c.hasEstimate ? c.estPct : -Infinity;
-    if (key === 'profit') return c.profitRate != null ? c.profitRate : -Infinity;
+    if (key === 'settle') return c.lastProfit;
     if (key === 'last') return c.lastNav > 0 ? c.lastReturn : -Infinity;
     if (key === 'month') return c.monthReturn != null ? c.monthReturn : -Infinity;
     return 0;
@@ -663,7 +678,7 @@ function renderTable(rows, totalMarket) {
 
   tbody.innerHTML = sorted.map((r, idx) => {
     const c = r.calc;
-    const profitCell = c.profitRate != null ? `<span class="${cls(c.profit)}">${signNum(c.profit)} <span style="font-size:11px">${fmtPct(c.profitRate)}</span></span>` : '<span style="color:#c4c9d4">--</span>';
+    const settleCell = c.lastNav > 0 ? `<span class="${cls(c.lastProfit)}">${signNum(c.lastProfit)}</span>` : '<span style="color:#c4c9d4">--</span>';
     const lastCell = c.lastNav > 0 ? `<span class="${cls(c.lastReturn)}">${fmtPct(c.lastReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
     const monthCell = c.monthReturn != null ? `<span class="${cls(c.monthReturn)}">${fmtPct(c.monthReturn)}</span>` : '<span style="color:#c4c9d4">--</span>';
     return `
@@ -673,7 +688,7 @@ function renderTable(rows, totalMarket) {
         <div class="fcode">${c.code}</div>
       </td>
       <td>${fmtMoney(c.marketValue)}</td>
-      <td>${profitCell}</td>
+      <td>${settleCell}</td>
       <td class="${c.hasEstimate ? cls(c.estPct) : 'flat'}">${c.hasEstimate ? signNum(c.estProfit) + ' <span style="font-size:11px">' + fmtPct(c.estPct) + '</span>' : '<span style="color:#c4c9d4">暂无</span>'}</td>
       <td class="${c.lastNav > 0 ? cls(c.lastReturn) : 'flat'}">${lastCell}</td>
       <td class="${c.monthReturn != null ? cls(c.monthReturn) : 'flat'}">${monthCell}</td>
@@ -686,15 +701,14 @@ function renderTable(rows, totalMarket) {
 
   // 合计行
   const totalEst = sorted.reduce((s, r) => s + r.calc.estProfit, 0);
-  const totalProfit = sorted.reduce((s, r) => s + (r.calc.principal > 0 ? r.calc.profit : 0), 0);
   const totalLast = sorted.reduce((s, r) => s + r.calc.lastProfit, 0);
   tbody.innerHTML += `
     <tr style="font-weight:700;background:#fafbfc;">
       <td class="fund-cell">合计</td>
       <td>${fmtMoney(totalMarket)}</td>
-      <td class="${cls(totalProfit)}">${signNum(totalProfit)}</td>
-      <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
       <td class="${cls(totalLast)}">${signNum(totalLast)}</td>
+      <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
+      <td></td>
       <td></td>
       <td></td>
     </tr>`;
