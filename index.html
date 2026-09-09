@@ -198,8 +198,8 @@
           <tr>
             <th>基金</th>
             <th>持有金额</th>
-            <th class="sortable" data-sort="settle" title="最近一次结算的涨跌金额（份额×净值变化）">结算收益<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="est" title="按今日估算涨跌幅排序">今日估算<span class="sort-arrow">↕</span></th>
+            <th class="sortable" data-sort="settle" title="最近一次结算的涨跌金额（份额×净值变化）">结算收益<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="last" title="上一个交易日净值结算收益率">上日结算<span class="sort-arrow">↕</span></th>
             <th class="sortable" data-sort="month" title="近一个月收益率">近一月收益<span class="sort-arrow">↕</span></th>
             <th></th>
@@ -688,8 +688,8 @@ function renderTable(rows, totalMarket) {
         <div class="fcode">${c.code}</div>
       </td>
       <td>${fmtMoney(c.marketValue)}</td>
-      <td>${settleCell}</td>
       <td class="${c.hasEstimate ? cls(c.estPct) : 'flat'}">${c.hasEstimate ? signNum(c.estProfit) + ' <span style="font-size:11px">' + fmtPct(c.estPct) + '</span>' : '<span style="color:#c4c9d4">暂无</span>'}</td>
+      <td>${settleCell}</td>
       <td class="${c.lastNav > 0 ? cls(c.lastReturn) : 'flat'}">${lastCell}</td>
       <td class="${c.monthReturn != null ? cls(c.monthReturn) : 'flat'}">${monthCell}</td>
       <td><button class="expand-btn" data-idx="${idx}">持仓</button></td>
@@ -706,8 +706,8 @@ function renderTable(rows, totalMarket) {
     <tr style="font-weight:700;background:#fafbfc;">
       <td class="fund-cell">合计</td>
       <td>${fmtMoney(totalMarket)}</td>
-      <td class="${cls(totalLast)}">${signNum(totalLast)}</td>
       <td class="${cls(totalEst)}">${signNum(totalEst)}</td>
+      <td class="${cls(totalLast)}">${signNum(totalLast)}</td>
       <td></td>
       <td></td>
       <td></td>
